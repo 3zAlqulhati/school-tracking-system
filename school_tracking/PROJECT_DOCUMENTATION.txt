@@ -1,0 +1,921 @@
+================================================================================
+      SMART SCHOOL TRACKING SYSTEM — COMPLETE PROJECT DOCUMENTATION
+================================================================================
+  Project Name  : Smart School Tracking System
+  Platform      : PHP 8.1 + MySQL (runs on XAMPP, localhost)
+  URL           : http://localhost/school_tracking
+  Database      : school_tracking_db
+  Written by    : Final Year Project
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 1 — WHAT IS THIS SYSTEM?
+────────────────────────────────────────────────────────────────────────────────
+
+The Smart School Tracking System is a web-based School Management System built
+with PHP and MySQL. It allows a school to manage students, teachers, parents,
+attendance, grades, assignments, and notifications — all from a web browser.
+
+There are FOUR types of users (roles):
+
+  1. ADMIN    — manages everything (users, classes, reports, notifications)
+  2. TEACHER  — records attendance, grades, creates assignments, sends notices
+  3. STUDENT  — views own attendance, grades, submits assignments, reads inbox
+  4. PARENT   — monitors their child's attendance, grades, and notifications
+
+Each role sees a different dashboard and menu after logging in.
+The system prevents one role from accessing another role's pages.
+
+Entry point: http://localhost/school_tracking
+  → index.php immediately redirects logged-in users to their dashboard,
+    and redirects guests to the login page.
+  → login.php is the public-facing entry point with a split-screen layout.
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 2 — TECHNOLOGY USED
+────────────────────────────────────────────────────────────────────────────────
+
+  Backend  : PHP 8.1 (runs on Apache via XAMPP)
+  Database : MySQL (via phpMyAdmin on XAMPP, port 3307)
+  Frontend : Custom CSS (navy blue design), HTML5
+  Icons    : Font Awesome 6.5.1 (loaded from internet CDN)
+  Charts   : Chart.js 4.4.0 (admin dashboard — loaded from internet CDN)
+  Fonts    : Google Fonts — Inter + Poppins (loaded from internet CDN)
+
+  NOTE: The site works fully offline EXCEPT for icons, charts, and fonts
+        which need an internet connection to load from CDN.
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 3 — DATABASE TABLES (11 tables)
+────────────────────────────────────────────────────────────────────────────────
+
+The database is called: school_tracking_db
+It has 11 tables. Here is what each one stores:
+
+  TABLE 1: users
+  ──────────────
+  Stores every person who can log in.
+  Columns: user_id, username, password (hashed), role, full_name,
+           email, phone, created_at, last_login, failed_attempts
+  One row per person (admin, teacher, student, or parent).
+
+  TABLE 2: classes
+  ────────────────
+  Stores school classes/classrooms.
+  Columns: class_id, class_name, academic_year, schedule, capacity, created_at
+  Example row: "Class 10A", "2025-2026", "Mon-Fri 08:00-14:00", capacity 30
+
+  TABLE 3: students
+  ─────────────────
+  Extra profile info for users who are students.
+  Columns: student_id, user_id (links to users), class_id (which class),
+           date_of_birth, gender, created_at
+  A student has one row in "users" AND one row in "students".
+
+  TABLE 4: teachers
+  ─────────────────
+  Extra profile info for users who are teachers.
+  Columns: teacher_id, user_id (links to users), subject_specialty, created_at
+  Example: teacher_id=1, subject_specialty="Mathematics & Science"
+
+  TABLE 5: parents
+  ────────────────
+  Links a parent to their child (student).
+  Columns: parent_id, user_id (the parent), student_id (their child),
+           relationship (e.g. "Father"), created_at
+  One parent can be linked to multiple children.
+
+  TABLE 6: class_teachers
+  ───────────────────────
+  Many-to-many link between classes and teachers.
+  Columns: class_id, teacher_id
+  A class can have multiple teachers; a teacher can teach multiple classes.
+
+  TABLE 7: assignments
+  ────────────────────
+  Stores homework/assignments created by teachers.
+  Columns: assignment_id, teacher_id, class_id, title, description,
+           file_path (optional attached file), deadline, created_at
+
+  TABLE 8: attendance
+  ───────────────────
+  Stores attendance records (one row per student per day).
+  Columns: attendance_id, student_id, teacher_id, class_id,
+           date, status (present / absent / late), created_at
+  UNIQUE KEY on (student_id, date) prevents duplicate entries.
+
+  TABLE 9: grades
+  ───────────────
+  Stores exam/quiz grades given to students.
+  Columns: grade_id, student_id, teacher_id, class_id, assignment_id,
+           subject, grade_value (0.00 to 100.00), exam_type, remarks, graded_at
+  Grade labels: A=90+, B=70-89, C=50-69, F=below 50
+
+  TABLE 10: notifications
+  ───────────────────────
+  Stores messages sent from admin/teachers to specific recipients or groups.
+  Columns: notification_id, sender_id, recipient_id (user or NULL),
+           title, message, is_read (0=unread, 1=read), created_at
+  If recipient_id is NULL → it is a broadcast (sent to everyone in target group).
+
+  TABLE 11: assignment_submissions
+  ─────────────────────────────────
+  Stores files uploaded by students for assignments.
+  Columns: submission_id, assignment_id, student_id, file_path, submitted_at
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 4 — PROJECT FOLDER STRUCTURE
+────────────────────────────────────────────────────────────────────────────────
+
+  school_tracking/                ← Root folder
+  │
+  ├── index.php                   ← Redirect-only entry point (no landing page)
+  ├── login.php                   ← Login page (all roles) — redesigned left panel
+  ├── logout.php                  ← Logs out and destroys session
+  │
+  ├── config/
+  │   └── db.php                  ← Database connection settings
+  │
+  ├── includes/
+  │   ├── auth.php                ← Login checks and role enforcement
+  │   ├── header.php              ← Top navbar shown on every page
+  │   ├── footer.php              ← Loads Chart.js and main.js
+  │   └── functions.php           ← Helper functions (flash messages, dates)
+  │
+  ├── admin/
+  │   ├── index.php               ← Admin dashboard with 4 charts + class filter
+  │   ├── manage_users.php        ← Add/edit/delete users + full details modal
+  │   ├── manage_classes.php      ← Add/edit/delete classes + details modal
+  │   ├── notifications.php       ← Send notifications (9 recipient types)
+  │   ├── inbox.php               ← Admin's personal notification inbox
+  │   └── reports.php             ← Generate attendance & grade reports
+  │
+  ├── teacher/
+  │   ├── index.php               ← Teacher dashboard
+  │   ├── attendance.php          ← Record daily attendance
+  │   ├── grades.php              ← Add/edit/delete student grades
+  │   ├── assignments.php         ← Create assignments, view submissions
+  │   ├── notifications.php       ← Send Notifications (class→student cascade)
+  │   └── inbox.php               ← Teacher's personal notification inbox
+  │
+  ├── student/
+  │   ├── index.php               ← Student dashboard
+  │   ├── view_attendance.php     ← View own attendance history
+  │   ├── view_grades.php         ← View own grades and GPA
+  │   ├── assignments.php         ← View and submit assignments
+  │   └── notifications.php       ← Student notification inbox
+  │
+  ├── parent/
+  │   ├── index.php               ← Parent dashboard (child overview)
+  │   ├── view_child.php          ← Full child details (attendance+grades)
+  │   └── notifications.php       ← Read notifications from teachers/admin
+  │
+  ├── assets/
+  │   ├── css/
+  │   │   └── style.css           ← All styling for the entire site
+  │   ├── js/
+  │   │   └── main.js             ← Shared JavaScript (sidebar, alerts, etc.)
+  │   └── uploads/
+  │       └── submissions/        ← Student uploaded assignment files
+  │
+  ├── school_tracking_db.sql      ← SQL to CREATE all database tables
+  ├── test_data.sql               ← SQL to INSERT sample/demo data
+  └── add_second_student.sql      ← SQL to add student4, student5 to Class 10B
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 5 — EVERY FILE EXPLAINED
+────────────────────────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CORE / SHARED FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILE: index.php
+  What it does: Redirect-only entry point. Contains no HTML or UI.
+  Behavior:
+    - If logged in → redirect to /<role>/index.php (e.g. /admin/index.php)
+    - If not logged in → redirect to /school_tracking/login.php
+  There is NO landing/home page. Login page is the public entry point.
+
+FILE: login.php
+  What it does: The login page for ALL roles (admin, teacher, student, parent).
+  Layout: Split-screen — left panel is branding, right panel is the login form.
+  Left panel includes:
+    - Brand: "Smart School Tracking System" / "School Management Platform"
+    - Tagline about modern school management
+    - 6-feature icon grid (attendance, grades, assignments, notifications,
+      analytics, parent portal)
+    - 4 role chips (Admin, Teacher, Student, Parent)
+    - Stats bar (e.g. 99.9% uptime, live data, multi-role)
+  Right panel includes:
+    - Username + password fields
+    - Password show/hide toggle
+    - After 5 wrong attempts → account locked for 15 minutes (security)
+    - Uses PHP password_verify() to check hashed passwords
+    - On success → redirects to the correct role dashboard
+  Browser tab title: "Sign In — Smart School Tracking System"
+
+FILE: logout.php
+  What it does: Destroys the PHP session and redirects to login page.
+  When used: When any user clicks "Logout" in the top navbar.
+
+FILE: config/db.php
+  What it does: Connects to the MySQL database using PDO.
+  Settings: host=127.0.0.1, port=3307, database=school_tracking_db, user=root
+  Returns: A $pdo object used by every other PHP file to run SQL queries.
+  Every page starts with: $pdo = require __DIR__ . '/../config/db.php';
+
+FILE: includes/auth.php
+  What it does: Security — makes sure users are logged in and in the right role.
+  Functions:
+    - requireLogin()  → if not logged in, redirect to login.php
+    - requireRole('teacher') → if wrong role, show "Access Denied"
+    - isLoggedIn() → returns true/false
+    - getCurrentUser() → returns array of current user data from session
+  Every protected page starts with requireLogin() and requireRole().
+
+FILE: includes/header.php
+  What it does: Outputs the top navbar shown on every page after login.
+  Contains:
+    - Logo icon + "Smart School Tracker" / "School Management System" text
+    - Hamburger menu button (for mobile, shown only when logged in)
+    - User avatar showing logged-in user's initials (generated by getInitials())
+    - Full name and role label in the navbar
+    - Logout button linking to logout.php
+    - HTML <head> with links to CSS, Google Fonts, Font Awesome (CDN)
+  Browser tab title: "Smart School Tracking System"
+
+FILE: includes/footer.php
+  What it does: Outputs the closing HTML and loads JavaScript files.
+  Loads: Chart.js 4.4.0 (from CDN) and assets/js/main.js
+  Footer text: "© [year] Smart School Tracking System. All rights reserved."
+
+FILE: includes/functions.php
+  What it does: Small helper functions used across the project.
+  Functions:
+    - setFlash() / getFlash() → store and show one-time success/error messages
+    - showFlash() → displays the flash message with the right icon
+    - formatDate() → converts database date format to readable format
+
+FILE: assets/css/style.css
+  What it does: All visual styling for the entire website.
+  Contains:
+    - CSS variables for color palette (navy blue theme):
+        --primary: #1e3a5f  --primary-light: #2d5a8e  --primary-dark: #0f1f33
+    - Navbar, sidebar, card, table, button, badge, form styles
+    - Login split-screen layout (.login-left, .login-right, .login-left-inner)
+    - Login left panel: uses justify-content:space-between for even distribution
+    - Stat card gradient icon colors (green, blue, orange, red, purple, etc.)
+    - Scrollable checkbox list (.checkbox-scroll-list) for teacher/student selection
+    - Modal overlay styles (.modal-overlay, .modal-box, .modal-header)
+    - Mobile responsive breakpoints
+
+FILE: assets/js/main.js
+  What it does: Shared JavaScript interactivity (loaded on every page via footer).
+  Features:
+    - Sidebar toggle (open/close on mobile with hamburger button)
+    - Alert auto-dismiss (success messages disappear after 5 seconds)
+    - Delete confirmation popup (asks "Are you sure?" before deleting)
+    - File size validation (rejects files over 10MB before upload)
+    - Form validation for .needs-validation forms (highlights empty required fields)
+    - Live table search/filter using [data-search] attribute
+    - Password show/hide toggle (.password-toggle button)
+    - Landing navbar scroll effect (.landing-nav)
+    - Counter animation on .stat-value elements (IntersectionObserver)
+    - Select All / Clear All for checkbox groups ([data-select-all] buttons)
+  NOTE: main.js does NOT contain handleRecipientType() — each notification
+        page defines its own version to avoid conflicts.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ADMIN FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILE: admin/index.php  (Admin Dashboard)
+  What it does: Shows a full statistics overview of the entire school.
+  Stat cards shown:
+    - Total Users, Total Classes, Total Students, Total Teachers,
+      Total Parents, Pending Assignments
+  Charts (using Chart.js):
+    - Line chart: Attendance trend for the last 7 days (present/absent/late)
+    - Doughnut chart: Overall attendance breakdown (% present vs absent vs late)
+    - Bar chart: Grade distribution (how many A, B, C, F grades exist)
+    - Pie chart: User role breakdown (how many teachers, students, parents)
+  Class filter: dropdown to filter all charts and stats by a specific class.
+  Also shows: Recent Users table (last 10 accounts created)
+
+FILE: admin/manage_users.php  (User Management)
+  What it does: The admin creates and manages all user accounts.
+  Features:
+    - Add new user: fill in name, username, password, role, email, phone
+    - Edit existing user: change any detail (name, email, phone, role)
+    - Delete user: removes user and all related data (cascades in DB)
+    - Table with search/filter bar (live) and role filter dropdown
+    - Role badges: Admin / Teacher / Student / Parent color-coded tags
+    - "You" badge on the admin's own account (cannot delete yourself)
+    - When adding/editing a Teacher: can set subject specialty
+    - When adding/editing a Student: can assign to a class, set DOB and gender
+    - When adding/editing a Parent: can link to their child (student)
+    - "Details" button (eye icon) on every row → opens Full Details Modal:
+        Modal shows: User ID, Full Name, Username, Email, Phone, Role badge,
+        Created date, and a role-specific section:
+          Teacher → Subject Specialty
+          Student → Class, Date of Birth, Gender
+          Parent  → list of linked children (name + class)
+  Data for modals is JSON-encoded into the page using json_encode() with
+  JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP flags for XSS safety.
+
+FILE: admin/manage_classes.php  (Class Management)
+  What it does: The admin creates and manages school classes.
+  Features:
+    - Add class: name, academic year, schedule, capacity
+    - Assign one or more teachers using scrollable checkbox list (same style
+      as student selection — checkboxes with Select All / Clear All buttons)
+    - Assign students to a class via scrollable checkbox list
+    - Edit class details (all fields including teachers and students)
+    - Delete class (warns if students are enrolled)
+    - Table shows: class name, year, teacher(s) with subject, enrolled count,
+      capacity, and a "Details" button
+    - "Details" button → opens Class Details Modal:
+        Modal shows: class info (year, schedule, capacity)
+        Teachers section: scrollable list of assigned teachers with subjects
+        Students section: scrollable list of enrolled students
+  Teacher/student selection uses scrollable checkbox lists (not chip UI).
+  POST data for teacher_ids[] and student_ids[] is restored on validation
+  failure so selections are preserved if the form has errors.
+
+FILE: admin/notifications.php  (Send Notifications)
+  What it does: Admin sends messages to any group or individual in the system.
+  Recipient types (9 options):
+    - Broadcast to ALL users
+    - All Students (system-wide)
+    - All Teachers (system-wide)
+    - All Parents (system-wide)
+    - All Students in a Class → shows class dropdown
+    - All Parents of a Class → shows class dropdown
+    - Specific Student → shows class dropdown first, then student dropdown
+                         (student list populates dynamically based on class)
+    - Specific Teacher → shows teacher dropdown
+    - Specific Parent  → shows class dropdown first, then student dropdown
+                         (finds parent linked to that student)
+  JS cascade: filterStudentsByClass(classId) fills the student dropdown using
+  $studentsByClass data JSON-encoded into the page from PHP.
+  handleRecipientType(type) controls which field groups are shown/hidden.
+  Also shows: Sent notifications history (last 30 batches).
+  Broadcast warning banner shown when "Broadcast to ALL" is selected.
+
+FILE: admin/inbox.php  (Admin Inbox)
+  What it does: Admin reads notifications sent to them personally.
+  Features:
+    - Lists all notifications where recipient_id = admin's user_id or NULL
+    - Unread notifications highlighted with blue left border and "New" badge
+    - "Mark as Read" button on unread messages
+    - Pagination: 10 notifications per page
+    - Shows: sender name, sent date/time, title, full message
+
+FILE: admin/reports.php  (Reports)
+  What it does: Generate and print data reports.
+  Report types available:
+    - Attendance Report: filter by class, month — shows each student's records
+    - Grade Report: filter by class, subject — shows all grades
+  Features:
+    - Dropdown filters (class, month, subject)
+    - Results shown in a table
+    - Print button to print the report directly from browser
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TEACHER FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILE: teacher/index.php  (Teacher Dashboard)
+  What it does: Overview page for the teacher after login.
+  Shows:
+    - Number of classes they teach
+    - Total assignments they have created
+    - Number of pending (ungraded) submissions
+    - Table of their classes with attendance status for today
+      (green "Done" if attendance taken, yellow "Pending" if not)
+    - Recent assignments list with submission counts
+
+FILE: teacher/attendance.php  (Record Attendance)
+  What it does: Teacher marks attendance for a class on a specific date.
+  Flow:
+    1. Teacher selects a class from dropdown
+    2. Teacher picks a date (defaults to today)
+    3. A table loads showing every student in that class
+    4. For each student: radio buttons → Present / Absent / Late
+    5. "All Present" / "All Absent" quick-mark buttons
+    6. Row highlights green (present), red (absent), orange (late) as you click
+    7. Click Save → data saved to the attendance table in the database
+    8. If attendance was already taken → it updates (no duplicate records;
+       UNIQUE KEY on student_id + date enforces this at DB level)
+  Also shows: Recent attendance history (last 10 dates) below the form
+
+FILE: teacher/grades.php  (Manage Grades)
+  What it does: Teacher adds, edits, and deletes student grades.
+  Features:
+    - Select class → select student (student list filters automatically)
+    - Fill in: subject, exam type (Quiz/Midterm/Final/Assignment/Project),
+      grade value (0–100), optional remarks
+    - Grade is saved to the grades table
+    - Edit an existing grade: click Edit → form pre-fills → save
+    - Delete a grade: asks for confirmation first
+    - All grades shown in a table with search/filter
+    - Grade badges: green for passing (75+), red for failing
+    - Teacher name column shows the teacher's subject specialty
+
+FILE: teacher/assignments.php  (Assignments)
+  What it does: Teacher creates assignments and views student submissions.
+  Two views:
+    (A) Assignment List View (default):
+        - Create new assignment: title, class, description, deadline,
+          optional file attachment (PDF/DOC/DOCX up to 10MB)
+        - Table of all assignments with: title, class, deadline, file,
+          submission count, status (Open / Closed / No Deadline)
+        - Delete assignment button
+    (B) Submissions View (click "Submissions" on any assignment):
+        - Shows assignment details (class, deadline, attached file)
+        - Summary: total students, how many submitted, how many did not
+        - Table of submitted students: name, submitted time, status, download file
+        - Table of students who have NOT submitted yet
+
+FILE: teacher/notifications.php  (Send Notifications)
+  What it does: Teacher sends messages to students, parents, or other recipients.
+  Sidebar label: "Send Notifications"
+  Recipient types:
+    - Broadcast to ALL users
+    - All Students in a Class → shows class dropdown
+    - All Parents of a Class → shows class dropdown
+    - Specific Student → shows class dropdown, then student dropdown populates
+    - Specific Parent  → shows class dropdown, then student dropdown populates
+                         (finds parent linked to that student)
+  JS cascade: class dropdown triggers filterStudentsByClass(classId) which
+  fills the student select from $studentsByClass JSON encoded in the page.
+  handleRecipientType(type) controls field visibility (defined on this page,
+  NOT in main.js).
+  Also shows: Sent notifications history (last 30 batches sent).
+
+FILE: teacher/inbox.php  (Teacher Inbox)
+  What it does: Teacher reads notifications sent to them personally.
+  Features:
+    - Lists all notifications where recipient_id = teacher's user_id or NULL
+    - Unread notifications highlighted with blue left border and "New" badge
+    - "Mark as Read" button on unread messages
+    - Pagination: 10 notifications per page
+    - Shows: sender name, sent date/time, title, full message
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  STUDENT FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILE: student/index.php  (Student Dashboard)
+  What it does: Overview page for the student after login.
+  Shows:
+    - Attendance rate this month (percentage)
+    - Number of pending assignments
+    - Overall GPA (average of all grades)
+    - Notification bell (if any unread messages)
+    - Recent attendance records (last few days)
+    - Recent grades
+
+FILE: student/view_attendance.php  (My Attendance)
+  What it does: Student views their full attendance history.
+  Features:
+    - Month filter: select any month to see records for that period
+    - Stat cards: Present count, Absent count, Late count, Attendance Rate %
+    - Progress bar showing attendance rate (green=good, yellow=warning, red=low)
+    - Warning if attendance is below 75% (minimum requirement)
+    - Full table: Date, Class, Status (Present/Absent/Late badges)
+
+FILE: student/view_grades.php  (My Grades)
+  What it does: Student views all their grades, grouped by subject.
+  Features:
+    - Overall GPA banner at top with grade letter (A/B/C/F) and progress bar
+    - Grade legend: A=90-100, B=70-89, C=50-69, F=below 50
+    - One card per subject showing:
+        - Subject average and letter grade
+        - Table with every exam: type, grade value, remarks, date
+
+FILE: student/assignments.php  (My Assignments)
+  What it does: Student views and submits assignments.
+  Two tabs:
+    (A) Pending tab:
+        - Cards for each assignment not yet submitted
+        - Shows: title, deadline (red if due soon), description
+        - Teacher name and their subject specialty
+        - Upload form: pick a file (PDF/DOC/DOCX/ZIP, max 10MB) and Submit
+    (B) Submitted tab:
+        - Table of all submitted assignments
+        - Shows: title, teacher, deadline, submitted date/time, status, file link
+
+FILE: student/notifications.php  (Student Inbox)
+  What it does: Student reads notifications sent to them by teachers or admin.
+  Features:
+    - Lists all notifications addressed to this student (personal + broadcasts)
+    - Unread notifications highlighted with blue left border and "New" badge
+    - "Mark as Read" button on unread messages
+    - Pagination: 10 notifications per page
+    - Shows: sender name, sent date/time, title, full message
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PARENT FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILE: parent/index.php  (Parent Dashboard)
+  What it does: Parent sees a quick summary of their child's school life.
+  If the parent has multiple children: dropdown to switch between them.
+  Shows:
+    - Child's name and class in a banner card
+    - Attendance rate this month
+    - Current GPA
+    - Unread notifications count
+    - Recent attendance records (last 5 days)
+    - Recent grades
+
+FILE: parent/view_child.php  (Child Details)
+  What it does: Full detailed view of the child's records.
+  Sections on one page:
+    (1) Attendance section:
+        - Month filter
+        - Stats (present, absent, late, rate %)
+        - Progress bar
+        - Full attendance table
+    (2) Grades section:
+        - GPA shown in header
+        - Grouped by subject, each with average and letter grade
+        - Full grade table per subject
+    (3) Assignments section:
+        - Side-by-side: Pending vs Submitted assignments
+        - Shows title, deadline, submission status
+
+FILE: parent/notifications.php  (Notifications)
+  What it does: Parent reads messages sent by teachers or admin.
+  Features:
+    - Lists all notifications for this parent (personal + broadcasts)
+    - Unread notifications highlighted with blue border and "New" badge
+    - Broadcasts show an orange "Broadcast" badge
+    - "Mark Read" button on unread messages
+    - Pagination: 10 notifications per page
+    - Shows: sender name, sent date/time, full message
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 6 — HOW THE LOGIN AND SECURITY WORKS
+────────────────────────────────────────────────────────────────────────────────
+
+  1. All passwords are HASHED using PHP's password_hash() (bcrypt algorithm).
+     Stored passwords in the database are NOT readable — they look like:
+     "$2y$10$CP4TBAuB.Y8rYaJnk1bwNeUI..."
+
+  2. Login check uses password_verify() — it compares the typed password
+     against the stored hash without ever storing the plain text.
+
+  3. Account lockout: after 5 wrong password attempts, the account is locked
+     for 15 minutes. The failed_attempts count is stored in the users table.
+
+  4. Sessions: when login succeeds, PHP stores the user's id and role in
+     a session variable ($_SESSION['user_id'] and $_SESSION['role']).
+
+  5. Every protected page calls requireLogin() and requireRole() from auth.php.
+     These check the session — if the session is missing or the role is wrong,
+     the user is immediately redirected to login.php.
+
+  6. All database queries use PDO prepared statements to prevent SQL Injection.
+
+  7. All output uses htmlspecialchars() to prevent XSS attacks.
+     JSON data embedded in pages uses JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP.
+
+  8. File uploads (assignments, submissions) are validated by both extension
+     and MIME type, and renamed to random names to prevent path attacks.
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 7 — COMPLETE EXAMPLE FLOW (Step by Step)
+────────────────────────────────────────────────────────────────────────────────
+
+  This example follows ONE day in the school from start to finish.
+  Characters: Mr. Ahmad (teacher), Ali (student), Hassan (Ali's father/parent)
+
+  ─────────────────────────────────────
+  STEP 1 — Admin sets up the school
+  ─────────────────────────────────────
+  The admin logs in with username: admin
+
+  → Goes to Manage Classes → Creates "Class 10A" (year 2025-2026, capacity 30)
+  → Assigns Mr. Ahmad as teacher using scrollable checkbox list
+  → Goes to Manage Users → Creates teacher account:
+      Username: teacher1, Password: teacher123, Role: Teacher
+      Subject Specialty: Mathematics & Science
+  → Creates student account:
+      Username: student1, Password: student123, Role: Student
+      Assigns to Class 10A
+  → Creates parent account:
+      Username: parent1, Password: parent123, Role: Parent
+      Links to student: Ali bin Hassan (child relationship: Father)
+  → Clicks "Details" button next to Ali's row to verify his class/DOB/gender
+
+  ─────────────────────────────────────
+  STEP 2 — Teacher creates an assignment
+  ─────────────────────────────────────
+  Mr. Ahmad logs in with username: teacher1, password: teacher123
+  → Redirected to Teacher Dashboard
+  → Sees: 1 class (Class 10A), 0 assignments, 0 submissions
+
+  → Clicks "Assignments" in sidebar
+  → Fills in:
+      Title: "Chapter 3 Problem Set"
+      Class: Class 10A
+      Description: "Solve problems 1-20 from Chapter 3"
+      Deadline: Tomorrow at 11:59 PM
+      File: uploads "chapter3_instructions.pdf"
+  → Clicks Save Assignment
+  → Assignment is now visible to all students in Class 10A
+
+  ─────────────────────────────────────
+  STEP 3 — Teacher takes attendance
+  ─────────────────────────────────────
+  → Mr. Ahmad clicks "Record Attendance" in sidebar
+  → Selects: Class = Class 10A, Date = Today
+  → A list of all students loads (Ali bin Hassan, Nurul Ain, etc.)
+  → Marks Ali as PRESENT, Nurul Ain as LATE
+  → Clicks "Save Attendance"
+  → Database records: Ali=present, Nurul Ain=late for today
+  → Teacher dashboard now shows Class 10A attendance as "Done" (green)
+
+  ─────────────────────────────────────
+  STEP 4 — Teacher gives a grade
+  ─────────────────────────────────────
+  → Mr. Ahmad clicks "Manage Grades" in sidebar
+  → Selects Class: Class 10A → Student: Ali bin Hassan
+  → Fills in:
+      Subject: Mathematics
+      Exam Type: Quiz
+      Grade Value: 85
+      Remarks: Good work!
+  → Clicks Save Grade
+  → Grade is saved. Ali will see this in his grades page.
+
+  ─────────────────────────────────────
+  STEP 5 — Teacher sends a notification to a specific parent
+  ─────────────────────────────────────
+  → Mr. Ahmad clicks "Send Notifications" in sidebar
+  → Selects: Recipient = Specific Parent
+  → Class dropdown appears → selects Class 10A
+  → Student dropdown populates automatically → selects Ali bin Hassan
+  → Title: "Assignment Reminder"
+  → Message: "Please remind your child that the Chapter 3 Problem Set
+               is due tomorrow at 11:59 PM."
+  → Clicks Send Notification
+  → 1 notification sent to Hassan (parent linked to Ali in Class 10A)
+
+  ─────────────────────────────────────
+  STEP 6 — Student submits assignment
+  ─────────────────────────────────────
+  Ali logs in with username: student1, password: student123
+  → Redirected to Student Dashboard
+  → Sees: Attendance 100%, 1 Pending Assignment, GPA 85.00
+
+  → Clicks "My Assignments" in sidebar
+  → Sees "Chapter 3 Problem Set" card under Pending tab
+      - Deadline: Tomorrow (badge shows in yellow)
+      - Teacher: Mr. Ahmad Razali — Mathematics & Science
+  → Clicks "Choose File" → picks "ali_chapter3.pdf" from computer
+  → Clicks Submit
+  → File is uploaded to assets/uploads/submissions/ folder
+  → Assignment moves to the "Submitted" tab — status: Submitted
+
+  ─────────────────────────────────────
+  STEP 7 — Student checks grades and attendance
+  ─────────────────────────────────────
+  → Ali clicks "My Grades" in sidebar
+  → Sees: Overall GPA = 85.00 (grade B)
+  → Mathematics section shows: Quiz → 85 → "B" badge → "Good work!" remark
+
+  → Ali clicks "My Attendance" in sidebar
+  → Sees: Present=1, Absent=0, Late=0, Rate=100%
+  → Table shows today: Present ✓
+
+  → Ali clicks "Notifications" in sidebar
+  → Sees no messages addressed to him (the reminder was sent to his parent)
+
+  ─────────────────────────────────────
+  STEP 8 — Parent checks child and reads notification
+  ─────────────────────────────────────
+  Hassan logs in with username: parent1, password: parent123
+  → Redirected to Parent Dashboard
+  → Sees banner: Ali bin Hassan — Class 10A
+  → Stat cards: Attendance 100%, GPA 85.00, 1 Unread Notification
+
+  → Clicks "Notifications" in sidebar
+  → Sees the message from Mr. Ahmad: "Assignment Reminder"
+  → Message reads: "Please remind your child..."
+  → Hassan clicks "Mark Read" — notification is marked as read
+
+  → Clicks "Child Details" in sidebar
+  → Sees full attendance history and grades for Ali
+  → Assignments section: Chapter 3 Problem Set → Submitted ✓
+
+  ─────────────────────────────────────
+  STEP 9 — Teacher views submissions
+  ─────────────────────────────────────
+  Mr. Ahmad logs back in
+  → Goes to Assignments
+  → Chapter 3 Problem Set now shows: 1 submission
+  → Clicks "Submissions" button
+  → Sees: Ali bin Hassan — submitted today — Download button to get the file
+  → Sees who has NOT submitted yet (if any)
+
+  ─────────────────────────────────────
+  STEP 10 — Admin generates a report
+  ─────────────────────────────────────
+  Admin logs in → clicks Reports
+  → Selects: Report Type = Attendance, Class = Class 10A, Month = current month
+  → Clicks Generate Report
+  → Table shows: Ali bin Hassan — today — Present
+  → Clicks Print Report → browser print dialog opens
+
+  ═══════════════════════════════════════
+  That completes one full day cycle of the system!
+  ═══════════════════════════════════════
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 8 — GRADE SYSTEM EXPLAINED
+────────────────────────────────────────────────────────────────────────────────
+
+  Grade Value    Letter    Badge Color
+  ───────────    ──────    ───────────
+  90 – 100       A         Green
+  70 – 89        B         Blue
+  50 – 69        C         Orange
+  Below 50       F         Red
+
+  GPA = Average of all grade_value records for that student
+  Subject Average = Average of all grades within one subject
+
+  Attendance rate = (Present days ÷ Total recorded days) × 100
+  Warning shown if attendance rate < 75%
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 9 — DEMO LOGIN CREDENTIALS
+────────────────────────────────────────────────────────────────────────────────
+
+  Role       Username    Password      Full Name                  Notes
+  ────────   ─────────   ──────────    ─────────────────────      ──────────────
+  Admin      admin       (set by you)  Administrator
+  Teacher    teacher1    teacher123    Mr. Ahmad Razali           Mathematics & Science
+  Teacher    teacher2    teacher123    Ms. Siti Norzahra          English & Literature
+  Student    student1    student123    Ali bin Hassan             Class 10A
+  Student    student2    student123    Nurul Ain binti Yusof      Class 10A
+  Student    student3    student123    Rajesh Kumar               Class 10B
+  Student    student4    student123    Amir bin Hassan            Class 10B (parent1's 2nd child)
+  Student    student5    student123    Ahmad bin Yusof            Class 10B (parent2's child)
+  Parent     parent1     parent123     Hassan bin Mahmud          linked to student1 + student4
+  Parent     parent2     parent123     Yusof bin Ismail           linked to student2 + student5
+
+  SQL files:
+    → school_tracking_db.sql   — creates all tables
+    → test_data.sql            — inserts base demo data (users, classes, etc.)
+    → add_second_student.sql   — adds student4, student5 and updates parent links
+
+  To load: open phpMyAdmin → select school_tracking_db → SQL tab → paste → Go
+  Run school_tracking_db.sql first, then test_data.sql, then add_second_student.sql.
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 10 — HOW TO RUN THE PROJECT
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Install XAMPP (if not already installed)
+  2. Copy the "school_tracking" folder into:  C:\xampp\htdocs\
+  3. Open XAMPP Control Panel → Start Apache and MySQL
+  4. Open browser → go to http://localhost/phpmyadmin
+  5. Create a new database called: school_tracking_db
+  6. Click the "SQL" tab → paste school_tracking_db.sql → click Go
+     (This creates all 11 tables)
+  7. Run test_data.sql the same way
+     (This adds sample users, classes, teachers, students, parents)
+  8. Optionally run add_second_student.sql to add student4 and student5
+  9. Open browser → go to http://localhost/school_tracking
+     (This redirects automatically to the login page)
+ 10. Log in using any credentials from Section 9 above
+
+  If you see "Database connection failed":
+    → Open config/db.php → check the port number (try 3306 instead of 3307)
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 11 — FILE UPLOAD DETAILS
+────────────────────────────────────────────────────────────────────────────────
+
+  Teacher assignments (reference files):
+    → Stored in: assets/uploads/
+    → Allowed types: PDF, DOC, DOCX
+    → Max size: 10 MB
+    → Files are renamed to random names (e.g. "64abc123def.pdf")
+
+  Student submissions:
+    → Stored in: assets/uploads/submissions/
+    → Allowed types: PDF, DOC, DOCX, ZIP
+    → Max size: 10 MB
+    → Files are renamed to random names starting with "sub_"
+    → Both file extension AND file MIME type are checked (extra security)
+    → Each student can only submit ONCE per assignment (database constraint)
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 12 — NOTIFICATION SYSTEM DETAILS
+────────────────────────────────────────────────────────────────────────────────
+
+  The notification system allows admin and teachers to send targeted messages.
+
+  RECIPIENT TYPES (admin/notifications.php and teacher/notifications.php):
+  ─────────────────────────────────────────────────────────────────────────
+  broadcast_all      → sends to every user in the system
+  all_students       → sends to every student
+  all_teachers       → sends to every teacher (admin only)
+  all_parents        → sends to every parent (admin only)
+  class_students     → sends to all students in a chosen class
+  class_parents      → sends to all parents of students in a chosen class
+  specific_student   → Step 1: choose class → Step 2: choose student from that class
+  specific_teacher   → choose teacher from dropdown (admin only)
+  specific_parent    → Step 1: choose class → Step 2: choose student → sends to their parent
+
+  HOW THE CLASS→STUDENT CASCADE WORKS:
+  ─────────────────────────────────────
+  PHP builds $studentsByClass: an associative array keyed by class_id,
+  each value being an array of {user_id, full_name} for students in that class.
+  This is JSON-encoded into the page as a JS variable.
+  When a class is selected, filterStudentsByClass(classId) reads that data
+  and populates the student <select> element dynamically.
+
+  INBOXES:
+  ─────────────────────────────────────
+  Every role has a notification inbox:
+    admin   → admin/inbox.php
+    teacher → teacher/inbox.php
+    student → student/notifications.php
+    parent  → parent/notifications.php
+  Each inbox shows notifications where recipient_id = that user's ID,
+  plus NULL (broadcast) notifications. Unread items are highlighted and
+  can be marked as read individually.
+
+  IMPORTANT IMPLEMENTATION NOTE:
+  ─────────────────────────────────────
+  main.js does NOT define handleRecipientType(). Each notification send
+  page defines its own version inline. This prevents main.js from silently
+  overriding the page-level function after DOMContentLoaded fires.
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 13 — QUICK REFERENCE: WHICH PAGE DOES WHAT
+────────────────────────────────────────────────────────────────────────────────
+
+  ACTION                               FILE
+  ──────────────────────────────────   ────────────────────────────────────
+  Visit site (auto-redirects)          index.php
+  Log in / log out                     login.php / logout.php
+  Admin: view stats and charts         admin/index.php
+  Admin: add/edit/delete users         admin/manage_users.php
+  Admin: view user full details        admin/manage_users.php (Details modal)
+  Admin: add/edit/delete classes       admin/manage_classes.php
+  Admin: view class details            admin/manage_classes.php (Details modal)
+  Admin: send notifications            admin/notifications.php
+  Admin: read inbox                    admin/inbox.php
+  Admin: view reports                  admin/reports.php
+  Teacher: view dashboard              teacher/index.php
+  Teacher: mark attendance             teacher/attendance.php
+  Teacher: add/edit/delete grades      teacher/grades.php
+  Teacher: manage assignments          teacher/assignments.php
+  Teacher: send notifications          teacher/notifications.php
+  Teacher: read inbox                  teacher/inbox.php
+  Student: view dashboard              student/index.php
+  Student: view attendance             student/view_attendance.php
+  Student: view grades                 student/view_grades.php
+  Student: submit assignments          student/assignments.php
+  Student: read notifications          student/notifications.php
+  Parent: view dashboard               parent/index.php
+  Parent: view child's full records    parent/view_child.php
+  Parent: read notifications           parent/notifications.php
+  Database connection                  config/db.php
+  Login/role security                  includes/auth.php
+  Navbar (top bar)                     includes/header.php
+  Footer + JavaScript loading          includes/footer.php
+  Helper functions                     includes/functions.php
+  All CSS styles                       assets/css/style.css
+  Shared JavaScript                    assets/js/main.js
+
+
+================================================================================
+  END OF DOCUMENTATION
+  Smart School Tracking System — Final Year Project
+================================================================================
